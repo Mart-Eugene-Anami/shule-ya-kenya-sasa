@@ -1,0 +1,2 @@
+ALTER TABLE public.teachers ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE public.teachers ALTER COLUMN subject DROP NOT NULL;
