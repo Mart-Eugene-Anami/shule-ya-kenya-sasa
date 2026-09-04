@@ -76,7 +76,7 @@ serve(async (req) => {
     }
 
     // Validate permissions
-    if (callerProfile.role === 'admin' && role === 'admin') {
+    if (callerProfile.role === 'school_admin' && role === 'school_admin') {
       return new Response(
         JSON.stringify({ error: 'School admins cannot create other admin accounts' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -90,10 +90,10 @@ serve(async (req) => {
       )
     }
 
-    // If creating an admin, verify that caller is super_admin
-    if (role === 'admin' && callerProfile.role !== 'super_admin') {
+    // If creating a school_admin, verify that caller is super_admin
+    if (role === 'school_admin' && callerProfile.role !== 'super_admin') {
       return new Response(
-        JSON.stringify({ error: 'Only super admins can create admin accounts' }),
+        JSON.stringify({ error: 'Only super admins can create school admin accounts' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

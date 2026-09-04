@@ -11,7 +11,7 @@ const corsHeaders = {
 
 interface InviteUserRequest {
   email: string;
-  role: 'admin' | 'teacher' | 'student';
+  role: 'school_admin' | 'teacher' | 'student';
   schoolId?: string;
   invitedBy: string;
   schoolName?: string;
@@ -149,7 +149,7 @@ serve(async (req) => {
     // Determine email content based on role
     let emailSubject, emailContent
     
-    if (role === 'admin') {
+    if (role === 'school_admin') {
       emailSubject = 'Invitation to Manage Your School on Shule ya Kenya Sasa'
       emailContent = `
         <!DOCTYPE html>
