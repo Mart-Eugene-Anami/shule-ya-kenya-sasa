@@ -114,7 +114,14 @@ async function buildStandardSubjectAllocations(
 ): Promise<SubjectLessonAllocation[]> {
   // Extract grade level from grade.level field or parse from grade name
   // Handles formats like "Grade 1", "Grade 7", "Form 1", "Standard 8", etc.
-  const gradeLevel = grade.level || parseInt(grade.name.replace(/\D/g, "")) || 1;
+  let gradeLevel = grade.level;
+  if (!gradeLevel) {
+    // Try to extract number from grade name (handles "Grade 1", "Form 2", "Standard 8", etc.)
+    const match = grade.name.match(/\d+/);
+    gradeLevel = match ? parseInt(match[0]) : 1;
+  }
+  // Ensure gradeLevel is a valid number
+  gradeLevel = typeof gradeLevel === 'number' && !isNaN(gradeLevel) ? gradeLevel : 1;
 
   // Find division for this grade based on curriculum and grade level range
   // This ensures proper subject selection for:
@@ -478,7 +485,13 @@ export const generateMasterTimetable = async (
       // Find matching config for this grade's division
       // Extract grade level from grade.level field or parse from grade name
       // This ensures proper configuration selection for all curriculum types
-      const gradeLevel = grade.level || parseInt(grade.name.replace(/\D/g, "")) || 1;
+      let gradeLevel = grade.level;
+      if (!gradeLevel) {
+        const match = grade.name.match(/\d+/);
+        gradeLevel = match ? parseInt(match[0]) : 1;
+      }
+      gradeLevel = typeof gradeLevel === 'number' && !isNaN(gradeLevel) ? gradeLevel : 1;
+
       const matchingDivision = (divisions || []).find(
         (d: any) => d.curriculum === grade.curriculum && gradeLevel >= d.grade_level_start && gradeLevel <= d.grade_level_end
       );

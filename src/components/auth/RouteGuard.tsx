@@ -95,7 +95,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
           return;
         }
       } catch {
-        // Allow access on error
+        // Allow access on error to prevent blocking legitimate users
       }
     }
 
@@ -116,7 +116,8 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
     // Check school_id for school-specific routes
     const schoolSpecificPaths = ["/students", "/teachers", "/grades", "/streams", "/attendance", "/exams", "/mark-entry", "/dashboard"];
     const isSchoolSpecificPath = schoolSpecificPaths.some(path => location.pathname.startsWith(path));
-    if (isSchoolSpecificPath && !user?.schoolId) {
+    
+    if (isSchoolSpecificPath && !user?.schoolId && user?.role !== "super_admin") {
       setAuthState('access_denied');
       navigate("/unauthorized", { replace: true });
       return;

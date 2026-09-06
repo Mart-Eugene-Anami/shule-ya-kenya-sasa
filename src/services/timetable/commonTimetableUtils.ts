@@ -39,6 +39,20 @@ export function calculatePeriodTimes(
   lessonsPerDay: number,
   breaks: BreakConfigInput[]
 ): PeriodTimeInfo[] {
+  // Validate inputs
+  if (!startTime || !startTime.match(/^\d{1,2}:\d{2}$/)) {
+    console.warn(`Invalid startTime format: ${startTime}. Using default 08:20`);
+    startTime = "08:20";
+  }
+  if (!lessonDurationMinutes || lessonDurationMinutes < 10) {
+    console.warn(`Invalid lessonDurationMinutes: ${lessonDurationMinutes}. Using default 40`);
+    lessonDurationMinutes = 40;
+  }
+  if (!lessonsPerDay || lessonsPerDay < 1 || lessonsPerDay > 15) {
+    console.warn(`Invalid lessonsPerDay: ${lessonsPerDay}. Using default 8`);
+    lessonsPerDay = 8;
+  }
+
   const [startHour, startMinute] = startTime.split(":").map(Number);
   let currentMinutes = startHour * 60 + startMinute;
 
@@ -53,7 +67,14 @@ export function calculatePeriodTimes(
 
     const breakAfter = breaks.find((b) => b.afterPeriod === period);
     if (breakAfter) {
-      currentMinutes += breakAfter.durationMinutes;
+      // Validate break duration
+      const breakDuration = breakAfter.durationMinutes || 0;
+      if (breakDuration > 0 && breakDuration < 120) {
+        currentMinutes += breakDuration;
+      } else if (breakDuration >= 120) {
+        console.warn(`Break duration too long (${breakDuration} minutes) after period ${period}. Capping at 120 minutes.`);
+        currentMinutes += 120;
+      }
     }
   }
 
@@ -328,7 +349,30 @@ export function allocateCoreSubjects(
 
         // Check room availability (shared room conflict detection)
         if (roomId && roomTracker && !isRoomFreeAt(roomTracker, roomId, day, slotTimeRange)) {
-          continue; // silently skip, try another slot
+          // Track room conflicts for reporting
+          if (item.allocation.teacherId) {
+            const tracker = globalTracker[item.allocation.teacherId];
+            if (tracker) {
+              // Only report if teacher is free but room is busy (this is a real room conflict)
+              if (isTeacherFreeAt(tracker, day, slotTimeRange)) {
+                conflicts.push({
+                  type: "room_conflict",
+                  message: `Room unavailable for ${item.allocation.subject} in ${label} on ${day} P${period} — room is already booked by another stream.`,
+                  details: { day, period, subject: item.allocation.subject, roomId },
+                });
+              }
+            }
+          }
+          continue; // try another slot
+        }
+
+        // Validate special room requirements
+        if (item.allocation.requiresSpecialRoom && item.allocation.specialRoomType) {
+          // This is a warning since we don't have room type info in the current context
+          // The actual room type validation should happen at the room allocation level
+          warnings.push(
+            `${label}: Subject "${item.allocation.subject}" requires a ${item.allocation.specialRoomType} room. Ensure the assigned room matches this requirement.`
+          );
         }
 
         if (item.allocation.teacherId) {
@@ -373,7 +417,20 @@ export function allocateCoreSubjects(
           const periodTimeInfo = periodTimes.find((pt) => pt.period === period)!;
           const slotTimeRange: TimeRange = { startMinutes: periodTimeInfo.startMinutes, endMinutes: periodTimeInfo.endMinutes };
 
-          if (roomId && roomTracker && !isRoomFreeAt(roomTracker, roomId, day, slotTimeRange)) continue;
+          if (roomId && roomTracker && !isRoomFreeAt(roomTracker, roomId, day, slotTimeRange)) {
+            // Report room conflict for optional subjects too
+            if (item.allocation.teacherId) {
+              const tracker = globalTracker[item.allocation.teacherId];
+              if (tracker && isTeacherFreeAt(tracker, day, slotTimeRange)) {
+                conflicts.push({
+                  type: "room_conflict",
+                  message: `Room unavailable for optional subject ${item.allocation.subject} in ${label} on ${day} P${period} — room is already booked.`,
+                  details: { day, period, subject: item.allocation.subject, roomId },
+                });
+              }
+            }
+            continue;
+          }
 
           if (item.allocation.teacherId) {
             const tracker = globalTracker[item.allocation.teacherId];

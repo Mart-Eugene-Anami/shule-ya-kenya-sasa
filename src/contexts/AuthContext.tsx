@@ -68,11 +68,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const setBasicUserFromAuth = useCallback((authUser: SupabaseUser) => {
     const metaData = authUser.user_metadata || {};
+    const validRoles: ("super_admin" | "school_admin" | "teacher" | "student")[] = ["super_admin", "school_admin", "teacher", "student"];
+    const userRole = validRoles.includes(metaData.role as any) 
+      ? (metaData.role as "super_admin" | "school_admin" | "teacher" | "student") 
+      : "student";
+    
     setUser({
       id: authUser.id,
       name: metaData.name || authUser.email?.split('@')[0] || "",
       email: authUser.email || "",
-      role: (metaData.role as "super_admin" | "school_admin" | "teacher" | "student") || "student",
+      role: userRole,
       schoolId: metaData.school_id
     });
   }, []);

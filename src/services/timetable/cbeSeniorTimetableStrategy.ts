@@ -428,6 +428,18 @@ function allocateSplitRoomOptionals(
             continue;
           }
 
+          // Validate room capacity for concurrent subjects
+          // In split rooms, concurrent subjects share the same physical space
+          // We need to ensure total students from both pathways don't exceed room capacity
+          const totalPathways = tracks.length;
+          if (totalPathways > 1) {
+            // Estimate: each pathway has roughly equal students
+            // This is a warning since we don't have actual student counts in the allocation context
+            warnings.push(
+              `${label}: Scheduling concurrent subjects ${existingAllocation.subject} and ${item.allocation.subject} in split room. Ensure room capacity is sufficient for all students from ${totalPathways} pathways.`
+            );
+          }
+
           concurrentSlots.set(slotKey, item.allocation);
           allocated++;
           item.remaining--;

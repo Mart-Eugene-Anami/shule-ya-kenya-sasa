@@ -149,7 +149,7 @@ const App = () => {
                 <Route 
                   path="/dashboard" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher", "student"]}>
                       <Dashboard />
                     </RouteGuard>
                   } 
@@ -167,7 +167,7 @@ const App = () => {
                 <Route 
                   path="/academic-setup" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <AcademicSetup />
                     </RouteGuard>
                   } 
@@ -176,7 +176,7 @@ const App = () => {
                 <Route 
                   path="/curriculum-setup" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <CurriculumSetup />
                     </RouteGuard>
                   } 
@@ -185,7 +185,7 @@ const App = () => {
                 <Route 
                   path="/students" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <Students />
                     </RouteGuard>
                   } 
@@ -194,7 +194,7 @@ const App = () => {
                 <Route 
                   path="/teachers" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Teachers />
                     </RouteGuard>
                   } 
@@ -203,7 +203,7 @@ const App = () => {
                 <Route 
                   path="/grades" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Grades />
                     </RouteGuard>
                   } 
@@ -212,7 +212,7 @@ const App = () => {
                 <Route 
                   path="/grades/:id/streams" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Streams />
                     </RouteGuard>
                   } 
@@ -221,7 +221,7 @@ const App = () => {
                 <Route 
                   path="/streams" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <StreamManagement />
                     </RouteGuard>
                   } 
@@ -248,7 +248,7 @@ const App = () => {
                 <Route
                   path="/attendance"
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <Attendance />
                     </RouteGuard>
                   } 
@@ -257,7 +257,7 @@ const App = () => {
                 <Route 
                   path="/exams" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Exams />
                     </RouteGuard>
                   } 
@@ -266,7 +266,7 @@ const App = () => {
                 <Route 
                   path="/marklists" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <Marklists />
                     </RouteGuard>
                   } 
@@ -348,7 +348,7 @@ const App = () => {
                 <Route 
                   path="/exam-marks/:id" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <ExamMarks />
                     </RouteGuard>
                   } 
@@ -357,7 +357,7 @@ const App = () => {
                 <Route 
                   path="/exam-marks-list/:id" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <ExamMarksList />
                     </RouteGuard>
                   } 
@@ -366,7 +366,7 @@ const App = () => {
                 <Route 
                   path="/analytics" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Analytics />
                     </RouteGuard>
                   } 
@@ -375,7 +375,7 @@ const App = () => {
                 <Route 
                   path="/exam-analytics/:examId" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <ExamAnalytics />
                     </RouteGuard>
                   } 
@@ -384,7 +384,7 @@ const App = () => {
                 <Route 
                   path="/grade-analytics/:gradeId" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <GradeAnalytics />
                     </RouteGuard>
                   } 
@@ -393,7 +393,7 @@ const App = () => {
                 <Route 
                   path="/stream-analytics/:gradeId/:streamId" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <GradeStreamAnalytics />
                     </RouteGuard>
                   } 
@@ -402,7 +402,7 @@ const App = () => {
                 <Route 
                   path="/student-analytics/:studentId" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <StudentAnalyticsPage />
                     </RouteGuard>
                   } 
@@ -411,7 +411,7 @@ const App = () => {
                 <Route 
                   path="/mark-entry" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <MarkEntry />
                     </RouteGuard>
                   } 
@@ -420,7 +420,7 @@ const App = () => {
                 <Route 
                   path="/student-history" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <StudentHistory />
                     </RouteGuard>
                   } 
@@ -429,7 +429,7 @@ const App = () => {
                 <Route 
                   path="/reports" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin", "teacher"]}>
                       <ReportGenerator />
                     </RouteGuard>
                   } 
@@ -438,7 +438,7 @@ const App = () => {
                 <Route 
                   path="/timetables" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Timetables />
                     </RouteGuard>
                   } 
@@ -447,7 +447,7 @@ const App = () => {
                 <Route 
                   path="/settings" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <Settings />
                     </RouteGuard>
                   } 
@@ -456,7 +456,7 @@ const App = () => {
                 <Route 
                   path="/academic-settings" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["school_admin", "super_admin"]}>
                       <AcademicSettings />
                     </RouteGuard>
                   } 
@@ -475,7 +475,7 @@ const App = () => {
                 <Route 
                   path="/create-school" 
                   element={
-                    <RouteGuard>
+                    <RouteGuard allowedRoles={["super_admin"]}>
                       <CreateSchool />
                     </RouteGuard>
                   } 
