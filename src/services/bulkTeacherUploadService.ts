@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { BulkUploadResult } from "@/types";
+import { withRetry } from "@/utils/retry";
 
-const CHUNK_SIZE = 10;
+const CHUNK_SIZE = 50;
 
 interface ParsedTeacher {
   name: string;
@@ -202,7 +203,7 @@ export const chunkedTeacherBulkUpload = async (
 
     let processedRows = parseErrors.length;
 
-    // Process in chunks
+    // Process in chunks using batch inserts for better performance
     for (let i = 0; i < teachers.length; i += CHUNK_SIZE) {
       // Check for cancellation before processing each chunk
       if (callbacks.isCancelled?.()) {
@@ -212,45 +213,70 @@ export const chunkedTeacherBulkUpload = async (
 
       const chunk = teachers.slice(i, i + CHUNK_SIZE);
       
-      // Process each teacher in the chunk
-      for (const teacher of chunk) {
-        // Check for cancellation before each insert
-        if (callbacks.isCancelled?.()) {
-          callbacks.onCancelled?.(result);
-          return;
-        }
+      // Prepare batch insert data
+      const insertData = chunk.map(teacher => {
+        const data: Record<string, any> = {
+          name: teacher.name,
+          school_id: schoolId,
+          status: 'active',
+          is_stream_teacher: teacher.isStreamTeacher,
+        };
+        if (teacher.email) data.email = teacher.email;
+        if (teacher.subject) data.subject = teacher.subject;
+        if (teacher.subjectsTaught.length > 0) data.subjects_taught = teacher.subjectsTaught;
+        if (teacher.qualification) data.qualification = teacher.qualification;
+        if (teacher.employmentType) data.employment_type = teacher.employmentType;
+        if (teacher.hireDate) data.hire_date = teacher.hireDate;
+        return data;
+      });
 
-        const insertData: Record<string, any> = {
+      // Batch insert for performance with retry logic
+      const insertError = await withRetry(
+        async () => {
+          const result = await supabase.from('teachers').insert(insertData as any);
+          return result.error;
+        },
+        { maxAttempts: 3, initialDelayMs: 500 }
+      );
+
+      if (insertError) {
+        // If batch insert fails, fall back to individual inserts with error tracking
+        for (const teacher of chunk) {
+          const singleData: Record<string, any> = {
             name: teacher.name,
             school_id: schoolId,
             status: 'active',
             is_stream_teacher: teacher.isStreamTeacher,
           };
-        if (teacher.email) insertData.email = teacher.email;
-        if (teacher.subject) insertData.subject = teacher.subject;
-        if (teacher.subjectsTaught.length > 0) insertData.subjects_taught = teacher.subjectsTaught;
-        if (teacher.qualification) insertData.qualification = teacher.qualification;
-        if (teacher.employmentType) insertData.employment_type = teacher.employmentType;
-        if (teacher.hireDate) insertData.hire_date = teacher.hireDate;
+          if (teacher.email) singleData.email = teacher.email;
+          if (teacher.subject) singleData.subject = teacher.subject;
+          if (teacher.subjectsTaught.length > 0) singleData.subjects_taught = teacher.subjectsTaught;
+          if (teacher.qualification) singleData.qualification = teacher.qualification;
+          if (teacher.employmentType) singleData.employment_type = teacher.employmentType;
+          if (teacher.hireDate) singleData.hire_date = teacher.hireDate;
 
-        const { error: insertError } = await supabase
-          .from('teachers')
-          .insert(insertData as any);
+          const { error: singleError } = await supabase
+            .from('teachers')
+            .insert(singleData as any);
 
-        if (insertError) {
-          result.failed++;
-          result.errors.push({
-            row: teacher.rowNumber,
-            reason: insertError.message.includes('duplicate') 
-              ? 'Duplicate email address' 
-              : insertError.message,
-            data: { name: teacher.name, email: teacher.email },
-          });
-        } else {
-          result.successful++;
+          if (singleError) {
+            result.failed++;
+            result.errors.push({
+              row: teacher.rowNumber,
+              reason: singleError.message.includes('duplicate') 
+                ? 'Duplicate email address' 
+                : singleError.message,
+              data: { name: teacher.name, email: teacher.email },
+            });
+          } else {
+            result.successful++;
+          }
+          processedRows++;
         }
-        
-        processedRows++;
+      } else {
+        // Batch insert succeeded
+        result.successful += chunk.length;
+        processedRows += chunk.length;
       }
 
       // Report progress after each chunk
@@ -258,7 +284,7 @@ export const chunkedTeacherBulkUpload = async (
       
       // Small delay between chunks to prevent overwhelming the database
       if (i + CHUNK_SIZE < teachers.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
 

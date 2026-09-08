@@ -89,65 +89,86 @@ const BulkAttendanceDownloadDialog = ({
         .eq("id", schoolId)
         .single();
 
-      for (const combo of selected) {
-        // Get students for this stream+grade
-        const { data: students } = await supabase
-          .from("students")
-          .select("id, name, admission_no")
-          .eq("stream_id", combo.streamId)
-          .eq("grade_id", combo.gradeId)
-          .eq("status", "active")
-          .order("name");
+      // Process combinations in parallel with concurrency limit
+      const CONCURRENCY_LIMIT = 5;
+      const chunks: typeof selected[] = [];
+      
+      for (let i = 0; i < selected.length; i += CONCURRENCY_LIMIT) {
+        chunks.push(selected.slice(i, i + CONCURRENCY_LIMIT));
+      }
 
-        if (!students?.length) continue;
+      for (const chunk of chunks) {
+        const results = await Promise.allSettled(
+          chunk.map(async (combo) => {
+            // Get students for this stream+grade
+            const { data: students } = await supabase
+              .from("students")
+              .select("id, name, admission_no")
+              .eq("stream_id", combo.streamId)
+              .eq("grade_id", combo.gradeId)
+              .eq("status", "active")
+              .order("name");
 
-        const studentIds = students.map((s) => s.id);
+            if (!students?.length) return null;
 
-        // Get attendance records in date range
-        const { data: records } = await supabase
-          .from("attendance")
-          .select("id, date, status, student_id")
-          .in("student_id", studentIds)
-          .gte("date", startDate)
-          .lte("date", endDate)
-          .order("date");
+            const studentIds = students.map((s) => s.id);
 
-        if (!records?.length) continue;
+            // Get attendance records in date range
+            const { data: records } = await supabase
+              .from("attendance")
+              .select("id, date, status, student_id")
+              .in("student_id", studentIds)
+              .gte("date", startDate)
+              .lte("date", endDate)
+              .order("date");
 
-        // Build date list from actual records
-        const uniqueDates = [...new Set(records.map((r) => r.date))].sort();
+            if (!records?.length) return null;
 
-        // Build period data for each student
-        const periodStudents = students.map((s) => {
-          const dailyStatuses = uniqueDates.map((d) => {
-            const rec = records.find((r) => r.student_id === s.id && r.date === d);
-            return { date: d, status: rec?.status || "-" };
-          });
-          const presentCount = dailyStatuses.filter((ds) => ds.status === "Present").length;
-          const absentCount = dailyStatuses.filter((ds) => ds.status === "Absent").length;
-          const lateCount = dailyStatuses.filter((ds) => ds.status === "Late").length;
-          const totalRecorded = presentCount + absentCount + lateCount;
+            // Build date list from actual records
+            const uniqueDates = [...new Set(records.map((r) => r.date))].sort();
 
-          return {
-            admissionNo: s.admission_no,
-            studentName: s.name,
-            dailyStatuses,
-            presentCount,
-            absentCount,
-            lateCount,
-            attendanceRate: totalRecorded > 0 ? Math.round((presentCount / totalRecorded) * 100) : 0,
-          };
-        });
+            // Build period data for each student
+            const periodStudents = students.map((s) => {
+              const dailyStatuses = uniqueDates.map((d) => {
+                const rec = records.find((r) => r.student_id === s.id && r.date === d);
+                return { date: d, status: rec?.status || "-" };
+              });
+              const presentCount = dailyStatuses.filter((ds) => ds.status === "Present").length;
+              const absentCount = dailyStatuses.filter((ds) => ds.status === "Absent").length;
+              const lateCount = dailyStatuses.filter((ds) => ds.status === "Late").length;
+              const totalRecorded = presentCount + absentCount + lateCount;
 
-        periodDataItems.push({
-          schoolName: school?.name,
-          gradeName: combo.gradeName,
-          streamName: combo.streamName,
-          startDate,
-          endDate,
-          students: periodStudents,
-          dates: uniqueDates,
-        });
+              return {
+                admissionNo: s.admission_no,
+                studentName: s.name,
+                dailyStatuses,
+                presentCount,
+                absentCount,
+                lateCount,
+                attendanceRate: totalRecorded > 0 ? Math.round((presentCount / totalRecorded) * 100) : 0,
+              };
+            });
+
+            return {
+              schoolName: school?.name,
+              gradeName: combo.gradeName,
+              streamName: combo.streamName,
+              startDate,
+              endDate,
+              students: periodStudents,
+              dates: uniqueDates,
+            };
+          })
+        );
+
+        // Process results and update progress
+        for (const result of results) {
+          if (result.status === "fulfilled" && result.value) {
+            periodDataItems.push(result.value);
+          }
+        }
+
+        setProgress({ current: periodDataItems.length, total: selectedCombinations.length });
       }
 
       if (periodDataItems.length === 0) {

@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { BulkUploadResult } from "@/types";
+import { withRetry } from "@/utils/retry";
 
-const CHUNK_SIZE = 20;
+const CHUNK_SIZE = 50;
 const ACCOUNT_TIMEOUT_MS = 20_000;
 
 const VALID_PATHWAYS = new Set(["stem", "arts_sports", "social_sciences"]);
@@ -869,7 +870,10 @@ export const chunkedBulkUpload = async (
       }
 
       const chunk = rows.slice(i, i + CHUNK_SIZE);
+      const validStudents: ParsedStudent[] = [];
+      const chunkErrors: BulkUploadResult["errors"] = [];
 
+      // Parse all rows in the chunk first
       for (let rowOffset = 0; rowOffset < chunk.length; rowOffset += 1) {
         if (callbacks.isCancelled?.()) {
           callbacks.onCancelled?.(result);
@@ -889,71 +893,118 @@ export const chunkedBulkUpload = async (
         });
 
         if ("error" in parsedRow) {
-          result.failed += 1;
-          result.errors.push(parsedRow.error);
+          chunkErrors.push(parsedRow.error);
           processedRows += 1;
-          continue;
+        } else {
+          validStudents.push(parsedRow.student);
         }
-
-        const student = parsedRow.student;
-
-        try {
-          const existsInDb = await doesStudentAlreadyExist(schoolId, student);
-          if (existsInDb) {
-            result.failed += 1;
-            result.errors.push({
-              row: student.rowNumber,
-              reason:
-                "Student already uploaded (same admission number, name, grade, and stream).",
-              data: { admissionNo: student.admissionNo, name: student.name },
-            });
-            processedRows += 1;
-            continue;
-          }
-
-          const { error: insertError } = await supabase.from("students").insert({
-            admission_no: student.admissionNo,
-            name: student.name,
-            date_of_birth: student.dateOfBirth,
-            grade_id: student.gradeId,
-            stream_id: student.streamId,
-            school_id: schoolId,
-            guardian_phone: student.contact,
-            status: "active",
-            enrollment_date: enrollmentDate,
-            pathway: student.pathway,
-            track_id: student.trackId,
-            email: student.email,
-          });
-
-          if (insertError) {
-            result.failed += 1;
-            result.errors.push({
-              row: student.rowNumber,
-              reason: insertError.message,
-              data: { admissionNo: student.admissionNo, name: student.name },
-            });
-          } else {
-            result.successful += 1;
-
-            if (options.createAccounts && student.email) {
-              await createStudentAccount(student, schoolId);
-            }
-          }
-        } catch (rowError) {
-          result.failed += 1;
-          result.errors.push({
-            row: student.rowNumber,
-            reason:
-              rowError instanceof Error ? rowError.message : "Failed to process student row.",
-            data: { admissionNo: student.admissionNo, name: student.name },
-          });
-        }
-
-        processedRows += 1;
       }
 
+      // Check for duplicates in database for valid students
+      const studentsToInsert: ParsedStudent[] = [];
+      for (const student of validStudents) {
+        if (callbacks.isCancelled?.()) {
+          callbacks.onCancelled?.(result);
+          return;
+        }
+
+        const existsInDb = await doesStudentAlreadyExist(schoolId, student);
+        if (existsInDb) {
+          chunkErrors.push({
+            row: student.rowNumber,
+            reason: "Student already uploaded (same admission number, name, grade, and stream).",
+            data: { admissionNo: student.admissionNo, name: student.name },
+          });
+          processedRows += 1;
+        } else {
+          studentsToInsert.push(student);
+        }
+      }
+
+      // Batch insert valid students with retry logic
+      if (studentsToInsert.length > 0) {
+        const insertData = studentsToInsert.map(student => ({
+          admission_no: student.admissionNo,
+          name: student.name,
+          date_of_birth: student.dateOfBirth,
+          grade_id: student.gradeId,
+          stream_id: student.streamId,
+          school_id: schoolId,
+          guardian_phone: student.contact,
+          status: "active",
+          enrollment_date: enrollmentDate,
+          pathway: student.pathway,
+          track_id: student.trackId,
+          email: student.email,
+        }));
+
+        const insertError = await withRetry(
+          async () => {
+            const result = await supabase.from("students").insert(insertData);
+            return result.error;
+          },
+          { maxAttempts: 3, initialDelayMs: 500 }
+        );
+
+        if (insertError) {
+          // If batch insert fails, fall back to individual inserts
+          for (const student of studentsToInsert) {
+            const { error: singleError } = await supabase.from("students").insert({
+              admission_no: student.admissionNo,
+              name: student.name,
+              date_of_birth: student.dateOfBirth,
+              grade_id: student.gradeId,
+              stream_id: student.streamId,
+              school_id: schoolId,
+              guardian_phone: student.contact,
+              status: "active",
+              enrollment_date: enrollmentDate,
+              pathway: student.pathway,
+              track_id: student.trackId,
+              email: student.email,
+            });
+
+            if (singleError) {
+              chunkErrors.push({
+                row: student.rowNumber,
+                reason: singleError.message,
+                data: { admissionNo: student.admissionNo, name: student.name },
+              });
+            } else {
+              result.successful += 1;
+              
+              if (options.createAccounts && student.email) {
+                await createStudentAccount(student, schoolId);
+              }
+            }
+            processedRows += 1;
+          }
+        } else {
+          // Batch insert succeeded
+          result.successful += studentsToInsert.length;
+          processedRows += studentsToInsert.length;
+
+          // Create accounts for students with emails (done sequentially to avoid rate limiting)
+          if (options.createAccounts) {
+            for (const student of studentsToInsert) {
+              if (student.email) {
+                await createStudentAccount(student, schoolId);
+              }
+            }
+          }
+        }
+      }
+
+      // Add chunk errors to result
+      result.failed += chunkErrors.length;
+      result.errors.push(...chunkErrors);
+
       callbacks.onChunkComplete(processedRows, result.successful, result.failed);
+      
+      // Small delay between chunks
+      if (i + CHUNK_SIZE < rows.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
 
     callbacks.onComplete(result);
