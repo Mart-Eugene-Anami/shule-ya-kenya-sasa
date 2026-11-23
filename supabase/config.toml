@@ -1,4 +1,4 @@
-project_id = "bzpfzlupiufzyoxibncm"
+project_id = "hlwsjhlgflrrgxudkdgd"
 
 [functions.delete-school]
 verify_jwt = false
