@@ -10,20 +10,22 @@ interface RouteGuardProps {
   allowedRoles?: Array<"super_admin" | "school_admin" | "teacher" | "student">;
 }
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/register/confirm", "/register/super-admin", "/access-restricted"];
+const PUBLIC_PATHS = ["/", "/login", "/access-restricted"];
 const ACCESS_EXEMPT_PATHS = ["/payment-info", "/access-restricted", "/unauthorized"];
 
-const LOADING_TIMEOUT_MS = 4000; // Reduced from 6s to 4s
+const LOADING_TIMEOUT_MS = 4000;
+const MAX_RETRIES = 3;
 
 type AuthState = 'loading' | 'authenticated' | 'unauthenticated' | 'access_denied' | 'authorized';
 
 const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
-  const { user, session, loading, isAuthorized } = useAuth();
+  const { user, session, loading, profileError, isAuthorized } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   
   const [authState, setAuthState] = useState<AuthState>('loading');
+  const [retryTick, setRetryTick] = useState(0);
   const lastCheckKeyRef = useRef('');
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -34,7 +36,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
   );
   const isAuthenticated = useMemo(() => !!session && !!user, [session, user]);
 
-  const checkKey = `${location.pathname}|${loading}|${user?.id}|${user?.role}|${user?.schoolId}|${!!session}`;
+  const checkKey = `${location.pathname}|${loading}|${user?.id}|${user?.role}|${user?.schoolId}|${!!session}|${profileError}|${retryTick}`;
 
   const performAuthCheck = useCallback(async () => {
     if (loading) return;
@@ -48,7 +50,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
 
     // Handle public paths
     if (isPublicPath) {
-      if (isAuthenticated && (location.pathname === "/login" || location.pathname.includes("/register"))) {
+      if (isAuthenticated && location.pathname === "/login") {
         let redirectPath = "/dashboard";
         if (user?.role === "super_admin") redirectPath = "/super-admin";
         else if (user?.role === "teacher") redirectPath = "/teacher-dashboard";
@@ -57,6 +59,18 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
         return;
       }
       setAuthState('authorized');
+      return;
+    }
+
+    // Signed in, but the profile could not be loaded (missing, unreadable, bad role).
+    // Wait briefly in case it is still loading, then explain the problem.
+    if (session && !user) {
+      if (!profileError && retryTick === 0) {
+        setAuthState('loading');
+        return;
+      }
+      setAuthState('access_denied');
+      navigate("/unauthorized", { replace: true, state: { reason: profileError ?? 'fetch_failed' } });
       return;
     }
 
@@ -75,7 +89,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
         variant: "destructive",
       });
       setAuthState('access_denied');
-      navigate("/unauthorized", { replace: true });
+      navigate("/unauthorized", { replace: true, state: { reason: 'role' } });
       return;
     }
 
@@ -117,14 +131,14 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
     const schoolSpecificPaths = ["/students", "/teachers", "/grades", "/streams", "/attendance", "/exams", "/mark-entry", "/dashboard"];
     const isSchoolSpecificPath = schoolSpecificPaths.some(path => location.pathname.startsWith(path));
     
-    if (isSchoolSpecificPath && !user?.schoolId && user?.role !== "super_admin") {
+    if (isSchoolSpecificPath && !user?.schoolId) { // super admins returned above
       setAuthState('access_denied');
-      navigate("/unauthorized", { replace: true });
+      navigate("/unauthorized", { replace: true, state: { reason: 'no_school' } });
       return;
     }
     
     setAuthState('authorized');
-  }, [checkKey, loading, session, user, location.pathname, navigate, allowedRoles, toast, isAuthorized, isPublicPath, isAccessExemptPath, isAuthenticated]);
+  }, [checkKey, loading, session, user, profileError, retryTick, location.pathname, navigate, allowedRoles, toast, isAuthorized, isPublicPath, isAccessExemptPath, isAuthenticated]);
 
   useEffect(() => {
     if (lastCheckKeyRef.current !== checkKey) {
@@ -137,8 +151,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
   useEffect(() => {
     if (authState === 'loading' || loading) {
       loadingTimerRef.current = setTimeout(() => {
-        lastCheckKeyRef.current = '';
-        setAuthState('loading');
+        setRetryTick((tick) => Math.min(tick + 1, MAX_RETRIES));
       }, LOADING_TIMEOUT_MS);
     }
     return () => {
@@ -147,7 +160,7 @@ const RouteGuard = ({ children, allowedRoles = [] }: RouteGuardProps) => {
         loadingTimerRef.current = null;
       }
     };
-  }, [authState, loading]);
+  }, [authState, loading, retryTick]);
 
   // Clear cache on logout
   useEffect(() => {
