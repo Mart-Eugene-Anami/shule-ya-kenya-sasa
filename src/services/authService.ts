@@ -2,9 +2,9 @@
  * Authentication Service
  *
  * Provides core auth operations for the school management system:
- * - signUp: Creates a new super_admin account (first-time registration)
  * - signIn / signOut: Standard email+password authentication
  * - createUser: Admin-only user creation via the create-user edge function
+ *   (there is no self-registration: accounts are created by admins only)
  * - checkUserRole / getCurrentUserSchoolId: Permission helpers
  *
  * Role mapping: The 'admin' role is internally converted to 'school_admin'
@@ -13,63 +13,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError, ValidationError, AuthenticationError, AppError, RateLimitError } from "@/lib/errors";
 import { checkRateLimit, resetRateLimit } from "@/utils/rateLimiter";
-
-export const signUp = async (name: string, email: string, password: string, role = 'super_admin') => {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          role: role === 'admin' ? 'school_admin' : role, // Convert admin to school_admin
-        }
-      }
-    });
-
-    if (error) {
-      throw handleSupabaseError(error);
-    }
-
-    if (!data.user) {
-      throw new ValidationError("Failed to create user account");
-    }
-
-    // Wait a second for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Verify that the profile was created properly
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .maybeSingle();
-      
-    if (profileError || !profileData) {
-      
-      // Manually create the profile if it doesn't exist
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          name: name,
-          email: email,
-          role: (role === 'admin' ? 'school_admin' : role) as "super_admin" | "school_admin" | "teacher" | "student"
-        })
-        .select()
-        .single();
-      
-      if (insertError) {
-        throw handleSupabaseError(insertError);
-      }
-    }
-    
-    return data.user;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw handleSupabaseError(error);
-  }
-};
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 
 export const signIn = async (email: string, password: string) => {
   try {
@@ -159,22 +103,14 @@ export const createUser = async (name: string, email: string, password: string, 
       throw new Error("Password is required and must be at least 6 characters");
     }
 
-    // Create the user with the admin API
-    const { data, error } = await supabase.functions.invoke('create-user', {
-      body: {
-        name,
-        email,
-        password,
-        role,
-        schoolId: targetSchoolId
-      }
+    // Create the user with the admin API (the server re-checks every permission)
+    return await invokeEdgeFunction('create-user', {
+      name,
+      email,
+      password,
+      role,
+      schoolId: targetSchoolId
     });
-
-    if (error) {
-      throw handleSupabaseError(error);
-    }
-
-    return data;
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw handleSupabaseError(error);
