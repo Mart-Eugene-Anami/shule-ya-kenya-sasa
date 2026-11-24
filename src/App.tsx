@@ -20,10 +20,6 @@ import AccessRestrictedPage from "./components/access/AccessRestrictedPage";
 
 // Lazy-load everything else
 const Login = lazy(() => import("./pages/auth/Login"));
-const MultiStepRegister = lazy(() => import("./pages/auth/MultiStepRegister"));
-const SuperAdminRegister = lazy(() => import("./pages/auth/SuperAdminRegister"));
-const InviteRegistration = lazy(() => import("./pages/auth/InviteRegistration"));
-const RegisterConfirm = lazy(() => import("./pages/auth/RegisterConfirm"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
@@ -49,7 +45,6 @@ const AcademicSettings = lazy(() => import("./pages/AcademicSettings"));
 const AcademicSetup = lazy(() => import("./pages/AcademicSetup"));
 const CurriculumSetup = lazy(() => import("./pages/CurriculumSetup"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
-const CreateSchool = lazy(() => import("./pages/schools/CreateSchool"));
 const SchoolView = lazy(() => import("./pages/schools/SchoolView"));
 const MarkEntry = lazy(() => import("./pages/MarkEntry"));
 const StudentHistory = lazy(() => import("./pages/StudentHistory"));
@@ -126,10 +121,6 @@ const App = () => {
                 {/* Public routes */}
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<MultiStepRegister />} />
-                <Route path="/super-admin-register" element={<SuperAdminRegister />} />
-                <Route path="/invite/:token" element={<InviteRegistration />} />
-                <Route path="/confirm" element={<RegisterConfirm />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/unauthorized" element={<Unauthorized />} />
@@ -472,14 +463,6 @@ const App = () => {
                   } 
                 />
 
-                <Route 
-                  path="/create-school" 
-                  element={
-                    <RouteGuard allowedRoles={["super_admin"]}>
-                      <CreateSchool />
-                    </RouteGuard>
-                  } 
-                />
 
                 <Route 
                   path="/schools/:schoolId" 
