@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react"; // rebuild
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth, AccountSetupError } from "../../contexts/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +76,16 @@ const Login = () => {
         description: "Welcome back!",
       });
     } catch (error: any) {
-      // Login error handled by toast below
+      // Correct password but the account can't be used (no profile, bad role):
+      // tell the user why, and don't count it as a failed password attempt.
+      if (error instanceof AccountSetupError) {
+        toast({
+          title: "Account not ready",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
 
       const nowLocked = recordFailedAttempt();
       setLockoutSeconds(getRemainingLockoutSeconds());
