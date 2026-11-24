@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 
 interface CreateStudentAccountParams {
   studentId: string;
@@ -22,19 +23,18 @@ export async function createStudentAccount(params: CreateStudentAccountParams): 
 
   try {
     // Create the user account via edge function
-    const { data, error } = await supabase.functions.invoke('create-user', {
-      body: {
+    let data: { user?: { id?: string } } | null = null;
+    try {
+      data = await invokeEdgeFunction('create-user', {
         name,
         email,
         password,
         role: 'student',
         schoolId
-      }
-    });
-
-    if (error) {
+      });
+    } catch (error) {
       console.error("Error creating student account:", error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : "Failed to create user account" };
     }
 
     if (!data?.user?.id) {
