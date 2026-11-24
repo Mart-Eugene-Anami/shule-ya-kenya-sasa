@@ -104,7 +104,6 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
   const navigationItems = user?.role === 'super_admin' 
     ? [
         { name: "Super Admin", href: "/super-admin", icon: Building },
-        { name: "Create School", href: "/create-school", icon: School },
       ] 
     : user?.role === 'teacher'
     ? teacherNavigationItems
@@ -241,3 +240,4 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
 };
 
 export default DashboardLayout;
+
