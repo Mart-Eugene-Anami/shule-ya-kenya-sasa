@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { School, Users, GraduationCap, ArrowRight, Edit, Trash2, RefreshCw, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { SchoolAccessToggle } from "./SchoolAccessToggle";
 import { getSchoolsWithAccessInfo, type SchoolAccessInfo } from "@/services/accessControlService";
 
@@ -182,16 +182,11 @@ export const SchoolsList = () => {
       setIsDeleting(schoolId);
       
       // Use the edge function to delete school and all associated user accounts
-      const { data, error } = await supabase.functions.invoke('delete-school', {
-        body: { schoolId }
-      });
-        
-      if (error) throw error;
-      
-      if (!data?.success) {
-        throw new Error(data?.error || 'Failed to delete school');
-      }
-      
+      const data = await invokeEdgeFunction<{ success: boolean; details?: { usersDeleted?: number } }>(
+        'delete-school',
+        { schoolId }
+      );
+
       const usersDeleted = data.details?.usersDeleted || 0;
       
       toast({
