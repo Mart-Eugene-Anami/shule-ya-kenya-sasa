@@ -15,6 +15,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { getSchoolSubjects, getUniqueSubjectNames, type SchoolSubject } from "@/services/subjectService";
 import { sanitizeInput, sanitizeEmail } from "@/utils/sanitize";
 
@@ -216,22 +217,18 @@ export const TeacherSubjectForm = ({ teacherId, onSaved, onCancel }: TeacherSubj
 
         // If teacher has no auth account but email+password provided, create one
         if (!hasAuthAccount && email.trim() && password) {
-          const { data: result, error: functionError } = await supabase.functions.invoke('create-teacher', {
-            body: {
-              name: cleanName,
-              email: cleanEmail,
-              password,
-              subject: subjects.length > 0 ? subjects[0] : 'Unassigned',
-              subjectsTaught: subjects.length > 0 ? subjects : undefined,
-              isStreamTeacher,
-              gradeStreamId: isStreamTeacher ? selectedGradeStreamId : undefined,
-              schoolId,
-              existingTeacherId: teacherId
-            }
+          // Throws with the server's own message on failure
+          await invokeEdgeFunction('create-teacher', {
+            name: cleanName,
+            email: cleanEmail,
+            password,
+            subject: subjects.length > 0 ? subjects[0] : 'Unassigned',
+            subjectsTaught: subjects.length > 0 ? subjects : undefined,
+            isStreamTeacher,
+            gradeStreamId: isStreamTeacher ? selectedGradeStreamId : undefined,
+            schoolId,
+            existingTeacherId: teacherId
           });
-
-          if (functionError) throw new Error(`Failed to create account: ${functionError.message}`);
-          if (!result || !result.success) throw new Error(result?.error || 'Failed to create account');
 
           toast({
             title: "Account created",
@@ -283,17 +280,8 @@ export const TeacherSubjectForm = ({ teacherId, onSaved, onCancel }: TeacherSubj
           schoolId
         };
 
-        const { data: result, error: functionError } = await supabase.functions.invoke('create-teacher', {
-          body: requestPayload
-        });
-
-        if (functionError) {
-          throw new Error(`Failed to create teacher: ${functionError.message}`);
-        }
-
-        if (!result || !result.success) {
-          throw new Error(result?.error || 'Failed to create teacher');
-        }
+        // Throws with the server's own message on failure
+        await invokeEdgeFunction('create-teacher', requestPayload);
 
         toast({
           title: "Teacher created",
@@ -547,3 +535,4 @@ export const TeacherSubjectForm = ({ teacherId, onSaved, onCancel }: TeacherSubj
     </div>
   );
 };
+
