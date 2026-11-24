@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctions";
 import { sanitizeInput, sanitizeEmail, sanitizePhone } from "@/utils/sanitize";
 
 interface SchoolRegistrationWizardProps {
@@ -100,15 +99,13 @@ export const SchoolRegistrationWizard = ({ onComplete, onCancel }: SchoolRegistr
         schoolEmail: sanitizeEmail(schoolEmail || '')
       };
 
-      const { data: result, error: functionError } = await supabase.functions.invoke('create-admin-user', {
-        body: requestPayload
-      });
+      // Throws with the server's own message (e.g. "email already registered") on failure
+      const result = await invokeEdgeFunction<{ success: boolean; schoolId?: string; error?: string }>(
+        'create-admin-user',
+        requestPayload
+      );
 
-      if (functionError) {
-        throw new Error(`HTTP error: ${functionError.message}`);
-      }
-
-      if (!result || !result.success) {
+      if (!result || !result.success || !result.schoolId) {
         const errorMsg = result?.error || 'Unknown error occurred';
         throw new Error(errorMsg);
       }
